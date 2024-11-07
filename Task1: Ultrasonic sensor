@@ -1,0 +1,61 @@
+// Define pins
+const int trigPin = 11;
+const int echoPin = 10;
+const int greenLED = 2;
+const int yellowLED = 4;
+const int redLED = 7;
+const int potPin = A4;
+
+long duration;
+int distance;
+int thresholdDistance;
+int threshdefault=10;
+
+void setup() {
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(greenLED, OUTPUT);
+  pinMode(yellowLED, OUTPUT);
+  pinMode(redLED, OUTPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Read potentiometer value and map it to a distance threshold
+  int potValue = analogRead(potPin);
+  thresholdDistance =threshdefault+ map(potValue, 0, 1023, 0, 100); // Adjust range as needed
+
+  // Send a pulse to the ultrasonic sensor
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Calculate distance based on the pulse duration
+  duration = pulseIn(echoPin, HIGH);
+  distance = duration * 0.034 / 2;
+
+  // Display distance in Serial Monitor
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.print(" cm, Threshold: ");
+  Serial.println(thresholdDistance);
+
+  // Control LEDs based on distance
+  if (distance < thresholdDistance) {
+    digitalWrite(greenLED, LOW);
+    digitalWrite(yellowLED, LOW);
+    digitalWrite(redLED, HIGH);
+  } else if (distance < thresholdDistance * 2) {
+    digitalWrite(greenLED, LOW);
+    digitalWrite(yellowLED, HIGH);
+    digitalWrite(redLED, LOW);
+  } else {
+    digitalWrite(greenLED, HIGH);
+    digitalWrite(yellowLED, LOW);
+    digitalWrite(redLED, LOW);
+  }
+
+  delay(200); // Delay for stability
+}
