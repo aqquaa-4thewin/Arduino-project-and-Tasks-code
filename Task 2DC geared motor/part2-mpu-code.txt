@@ -1,0 +1,128 @@
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_ADXL345_U.h>
+#include <LiquidCrystal.h>
+#include <Encoder.h>
+
+// Pin definitions for LCD
+const int rs = 7;    // Register Select
+const int rw = 8;    // Read/Write
+const int enable = 9; // Enable Pin
+const int d4 = 10;   // Data Pins (D4-D7)
+const int d5 = 11;
+const int d6 = 12;
+const int d7 = 13;
+
+// Pin definitions for motor and encoder
+const int motorIn1 = 2;
+const int motorIn2 = 4;
+const int motorEnable = 3;
+const int encoderPinA = 5;  // Encoder A pin
+const int encoderPinB = 6;  // Encoder B pin
+
+// Create an Encoder instance
+Encoder enc(encoderPinA, encoderPinB);
+
+// ADXL345 instance for accelerometer
+Adafruit_ADXL345_Unified adxl = Adafruit_ADXL345_Unified(12345);
+
+// Variables for tilt angle
+float lastAngle = 0.0;
+const float angleThreshold = 1.0;
+
+// Initialize the parallel LCD (pins RS, RW, E, D4-D7)
+LiquidCrystal lcd(rs, rw, enable, d4, d5, d6, d7);
+
+void setup() {
+  // Set motor and encoder pins as outputs and inputs
+  pinMode(motorIn1, OUTPUT);
+  pinMode(motorIn2, OUTPUT);
+  pinMode(motorEnable, OUTPUT);
+
+  // Start Serial Communication
+  Serial.begin(9600);
+
+  // Initialize the accelerometer
+  if (!adxl.begin()) {
+    Serial.println("ADXL345 not detected.");
+    while (1);
+  }
+  adxl.setRange(ADXL345_RANGE_4_G);
+
+  // Initialize the LCD
+  lcd.begin(16, 2);  // 16x2 LCD
+  lcd.clear();
+  lcd.print("Initializing...");
+  delay(2000);
+  lcd.clear();
+
+  // Start with the motor off
+  digitalWrite(motorIn1, LOW);
+  digitalWrite(motorIn2, LOW);
+  Serial.println("Motor is stopped.");
+  lcd.print("Motor Stopped");
+}
+
+void loop() {
+  // Read accelerometer data
+  sensors_event_t event;
+  adxl.getEvent(&event);
+
+  float ax = event.acceleration.x;
+  float ay = event.acceleration.y;
+  float az = event.acceleration.z;
+
+  // Calculate the tilt angle
+  float currentAngle = atan2(ay, sqrt(ax * ax + az * az)) * 180.0 / PI;
+
+  // Calculate the angle difference
+  float angleDiff = currentAngle - lastAngle;
+
+  // Update LCD with MPU tilt angle
+  lcd.setCursor(0, 0); // Set cursor to the first row
+  lcd.print("MPU Angle: ");
+  lcd.print(currentAngle, 1); // Show 1 decimal place
+  lcd.print("  ");
+
+  // Update LCD with encoder ticks and direction
+  long encoderTicks = enc.read(); // Read the encoder position
+  lcd.setCursor(0, 1); // Set cursor to the second row
+  lcd.print("Ticks: ");
+  lcd.print(encoderTicks); // Show encoder ticks
+
+  // Debugging: Print encoder position to the serial monitor
+  Serial.print("Encoder Ticks: ");
+  Serial.println(encoderTicks);
+
+  // Display motor direction based on angle difference
+  if (abs(angleDiff) > angleThreshold) {
+    int motorSpeed = map(abs(angleDiff), 0, 90, 0, 255); // Map angle difference to motor speed
+    motorSpeed = constrain(motorSpeed, 0, 255);
+
+    if (angleDiff > 0) { // Move forward (tilt forward)
+      digitalWrite(motorIn1, HIGH);
+      digitalWrite(motorIn2, LOW);
+      analogWrite(motorEnable, motorSpeed);
+      lcd.setCursor(9, 1);
+      lcd.print("Forward ");
+    } else { // Move backward (tilt backward)
+      digitalWrite(motorIn1, LOW);
+      digitalWrite(motorIn2, HIGH);
+      analogWrite(motorEnable, motorSpeed);
+      lcd.setCursor(9, 1);
+      lcd.print("Backward");
+    }
+  } else {
+    // Stop motor if no significant angle change
+    digitalWrite(motorIn1, LOW);
+    digitalWrite(motorIn2, LOW);
+    digitalWrite(motorEnable, LOW);
+    lcd.setCursor(9, 1);
+    lcd.print("Stopped ");
+  }
+
+  // Update the last angle
+  lastAngle = currentAngle;
+
+  delay(100); // Small delay for stability
+}
